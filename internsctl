@@ -1,0 +1,140 @@
+#!/bin/bash
+
+VERSION="1.4"
+
+print_help() {
+    echo "Usage: internsctl [command] [subcommand]"
+    echo ""
+    echo "Commands:"
+    echo "  cpu getinfo           Display CPU information"
+    echo "  memory getinfo        Display Memory information"
+    echo "  user create <username> Create a new user"
+    echo "  user list [--sudo-only] List users"
+    echo "  file getinfo <file-name> Get information about a file"
+    echo "  file getinfo [options] <file-name> Get detailed information about a file"
+    echo ""
+    echo "Options:"
+    echo "  --help                Display this help message"
+    echo "  --version             Display version information"
+}
+
+get_memory_info() {
+    echo "Memory Information:"
+    free -h
+}
+
+get_file_info() {
+    file_name="$1"
+    if [ -e "$file_name" ]; then
+        echo "File: $file_name"
+        echo "Access: $(ls -l "$file_name" | cut -d ' ' -f 1)"
+        echo "Size(B): $(stat -c %s "$file_name")"
+        echo "Owner: $(stat -c %U "$file_name")"
+        echo "Modify: $(stat -c %y "$file_name")"
+    else
+        echo "File not found: $file_name"
+    fi
+}
+
+get_detailed_file_info() {
+    file_name="$1"
+    shift
+    for option in "$@"; do
+        case "$option" in
+            --size | -s)
+                echo "Size(B): $(stat -c %s "$file_name")"
+                ;;
+            --permissions | -p)
+                echo "Access: $(ls -l "$file_name" | cut -d ' ' -f 1)"
+                ;;
+            --owner | -o)
+                echo "Owner: $(stat -c %U "$file_name")"
+                ;;
+            --last-modified | -m)
+                echo "Modify: $(stat -c %y "$file_name")"
+                ;;
+            *)
+                echo "Invalid option: $option"
+                ;;
+        esac
+    done
+}
+
+case "$1" in
+    --help)
+        print_help
+        ;;
+    --version)
+        echo "InternsCTL version $VERSION"
+        ;;
+    cpu)
+        case "$2" in
+            getinfo)
+                echo "CPU Information:"
+                lscpu
+                ;;
+            *)
+                echo "Invalid CPU subcommand. Usage: internsctl cpu getinfo"
+                ;;
+        esac
+        ;;
+    memory)
+        case "$2" in
+            getinfo)
+                get_memory_info
+                ;;
+            *)
+                echo "Invalid memory subcommand. Usage: internsctl memory getinfo"
+                ;;
+        esac
+        ;;
+    user)
+        case "$2" in
+            create)
+                if [ -z "$3" ]; then
+                    echo "Usage: internsctl user create <username>"
+                else
+                    sudo useradd -m "$3"
+                    sudo passwd "$3"
+                    echo "User $3 created successfully."
+                fi
+                ;;
+            list)
+                if [ "$3" == "--sudo-only" ]; then
+                    echo "Users with sudo permissions:"
+                    grep -Po '^sudo.+:\K.*$' /etc/group | tr ',' '\n'
+                else
+                    echo "All users:"
+                    getent passwd | cut -d: -f1
+                fi
+                ;;
+            *)
+                echo "Invalid user subcommand. Usage: internsctl user create <username> OR internsctl user list [--sudo-only]"
+                ;;
+        esac
+        ;;
+    file)
+        case "$2" in
+            getinfo)
+                if [ -z "$3" ]; then
+                    echo "Usage: internsctl file getinfo <file-name>"
+                else
+                    get_file_info "$3"
+                fi
+                ;;
+            *)
+                if [ -z "$2" ]; then
+                    echo "Usage: internsctl file getinfo <file-name>"
+                else
+                    get_file_info "$2"
+                    shift 1  # Shift to skip the "file" option
+                    get_detailed_file_info "$2" "$@"
+                fi
+                ;;
+        esac
+        ;;
+    *)
+        echo "Invalid command. Usage: internsctl [command] [subcommand]"
+        ;;
+esac
+
